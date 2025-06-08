@@ -5,9 +5,9 @@ import { Farm } from "./Farm.sol";
 import { IERC20 } from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import { SafeERC20 } from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import { ERC20 } from "@openzeppelin/contracts/token/ERC20/ERC20.sol";
-import { IAaveV3Pool } from "@interfaces/aave/IAaveV3Pool.sol";
-import { IAddressProvider } from "@interfaces/aave/IAddressProvider.sol";
-import { IAaveDataProvider } from "@interfaces/aave/IAaveDataProvider.sol";
+import { IAaveV3Pool } from "../Interface/Aave/IAaveV3Pool.sol";
+import { IAddressProvider } from "../Interface/Aave/IAddressProvider.sol";
+import { IAaveDataProvider } from "../Interface/Aave/IAaveDataProvider.sol";
 
 contract AaveV3Farm is Farm {
     using SafeERC20 for IERC20;

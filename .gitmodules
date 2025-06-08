@@ -13,3 +13,12 @@
 [submodule "lib/chainlink-brownie-contracts"]
 	path = lib/chainlink-brownie-contracts
 	url = https://github.com/smartcontractkit/chainlink-brownie-contracts
+[submodule "mobile-verifier-dapp/lib/v3-periphery"]
+	path = mobile-verifier-dapp/lib/v3-periphery
+	url = https://github.com/Uniswap/v3-periphery
+[submodule "mobile-verifier-dapp/lib/v3-core"]
+	path = mobile-verifier-dapp/lib/v3-core
+	url = https://github.com/Uniswap/v3-core
+[submodule "mobile-verifier-dapp/lib/chainlink"]
+	path = mobile-verifier-dapp/lib/chainlink
+	url = https://github.com/smartcontractkit/chainlink

@@ -1,23 +1,21 @@
-// SPDX-License-Identifier: UNLICENSED
-pragma solidity ^0.8.13;
+// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.28;
 
-interface IGameContractCrossChain {
+import { Structss } from "../../DataTypes/Structs.sol";
+
+interface ICardGameWithNFT {
     // Events
-    event GameStarted(address indexed player, uint256 betAmount);
-    event CardDrawn(address indexed player, uint256 cardValue);
-    event GameResult(address indexed player, bool won, uint256 amount);
-    event CrossChainUpdate(address indexed player, bytes32 updateHash);
-    event BalanceUpdated(address indexed player, uint256 newBalance);
+  
+    // Game creation and flow
+    function CreateNewGame(uint256 betAmountRequired, uint256 noOFPlayer) external;
+    function joinGame(uint256 gameId, uint256 _amount) external;
+    function startGame(uint256 gameId) external;
 
-    // Start a new game with a bet
-    function startGame(uint256 betAmount) external;
+    // Player actions
+    function hit(uint256 gameId) external;
+    function poke(uint256 gameId, address target) external;
+    function stand(uint256 gameId) external;
 
-    // Player action to draw another card
-    function hit() external;
-
-    // Player action to stand
-    function stand() external;
-
-    // Cross-chain verification functions
-    function verifyPolkadotUpdate(bytes32 updateHash, bytes calldata proof) external view returns (bool);
+    // View functions
+   
 }

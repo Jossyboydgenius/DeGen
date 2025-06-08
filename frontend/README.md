@@ -19,6 +19,7 @@ A modern, responsive frontend application for the Mobile Verifier DApp, built wi
 ## Features
 
 ### Core Features
+
 - Modern, responsive UI with dark/light mode support
 - Web3 wallet integration
 - Transaction verification interface
@@ -32,6 +33,7 @@ A modern, responsive frontend application for the Mobile Verifier DApp, built wi
 - Data visualization with Recharts
 
 ### Chainlink VRF Integration
+
 - Provably fair random number generation
 - VRF request management
 - Random number display and verification
@@ -39,6 +41,7 @@ A modern, responsive frontend application for the Mobile Verifier DApp, built wi
 - Request history tracking
 
 ### Transaction Management
+
 - Real-time transaction verification
 - Transaction history with filtering
 - Transaction status monitoring
@@ -46,6 +49,7 @@ A modern, responsive frontend application for the Mobile Verifier DApp, built wi
 - Transaction confirmation tracking
 
 ### Yield Management
+
 - Yield vault monitoring
 - APY calculation and display
 - Deposit and withdrawal interface
@@ -53,6 +57,7 @@ A modern, responsive frontend application for the Mobile Verifier DApp, built wi
 - Historical yield data visualization
 
 ### Voting System
+
 - Proposal creation and management
 - Voting power calculation
 - Vote casting interface
@@ -60,6 +65,7 @@ A modern, responsive frontend application for the Mobile Verifier DApp, built wi
 - Voting history tracking
 
 ### Lite Mode
+
 - Optimized for low-end devices
 - Reduced data usage
 - Simplified UI components
@@ -67,6 +73,7 @@ A modern, responsive frontend application for the Mobile Verifier DApp, built wi
 - Performance optimization
 
 ### Balance Management
+
 - Real-time balance tracking
 - Multi-token support
 - Transaction history
@@ -84,13 +91,15 @@ A modern, responsive frontend application for the Mobile Verifier DApp, built wi
 ## Installation
 
 1. Install dependencies:
+
 ```bash
 pnpm install
 # or
 npm install
 ```
 
-2. Create a `.env.local` file in the root directory:
+2;. Create a `.env.local` file in the root directory:
+
 ```env
 NEXT_PUBLIC_RPC_URL=your_rpc_url_here
 NEXT_PUBLIC_CONTRACT_ADDRESS=your_contract_address_here
@@ -103,17 +112,18 @@ NEXT_PUBLIC_IEXEC_APP_ADDRESS=your_iexec_app_address
 ## Development
 
 1. Start the development server:
+
 ```bash
 pnpm dev
 # or
 npm run dev
 ```
 
-2. Open [http://localhost:3000](http://localhost:3000) in your browser
-
 ## Project Structure
 
-```
+3;. Open [http://localhost:3000](http://localhost:3000) in your browser
+
+```bash
 frontend/
 ├── src/
 │   ├── app/              # Next.js app directory
@@ -217,4 +227,4 @@ This project is licensed under the MIT License.
 - Tailwind CSS documentation
 - Ethers.js documentation
 - Chainlink VRF documentation
-- iExec DataProtector documentation 
+- iExec DataProtector documentation

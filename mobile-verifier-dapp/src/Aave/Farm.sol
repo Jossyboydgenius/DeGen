@@ -11,7 +11,7 @@ abstract contract Farm is IFarm {
 
     address public immutable assetToken;
     uint256 public cap;
-    IManager public immutable override manager;
+    IManager public immutable  manager;
 
     address internal entryPoint;
 

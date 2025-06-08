@@ -2,7 +2,7 @@
 pragma solidity 0.8.28;
 
 import {ERC20} from "@openzeppelin/contracts/token/ERC20/ERC20.sol";
-import {IEntry} from "../Interface/Core/Ientry.sol";
+import {IEntry} from "../Interface/Core/IEntry.sol";
 
 contract Token is ERC20 {
     address public owner;
@@ -25,7 +25,10 @@ IEntry public entryPoint;
     }
 
       modifier onlyEntryPoint() {
-        require(msg.sender == entryPoint);
-        _;
+      if (msg.sender != address(entryPoint)) {
+            revert("Only Entry Point can call this function");
+            _;
         }
+}
+
 }

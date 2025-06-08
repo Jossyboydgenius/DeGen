@@ -1,51 +1,117 @@
 //SPDX-License-Identifier:MIT
 
-pragma solidity 0.8.26;
+pragma solidity 0.8.28;
 import{Structss} from "../DataTypes/Structs.sol";
 import{ErrorLib} from "../DataTypes/Errors.sol";
 import { IManager } from "../Interface/Core/Imanager.sol";
 import{IFarm} from "../Interface/Aave/IFarm.sol";
 import {Token} from "../Token/token.sol";
-import {Clones} from "@openzeppelin/contracts/proxy/Clones.sol";
-import {IswapManager} from "../Interface/Core/Iswapmanager.sol";
-import{IGameContractCrossChain} from "../Interface/Games/IGameContractCrossChain.sol";
+import "@openzeppelin/contracts/proxy/Clones.sol";
+
+import {ISwapManager} from "../Interface/Core/Iswapmanager.sol";
+import{ICardGameWithNFT} from "../Interface/Games/IGameContract.sol";
+import { IERC20 } from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import{ IRankNFT} from "../Interface/Games/IRankNFT.sol";
+import { SafeERC20 } from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 contract Entry{
+
+using SafeERC20 for IERC20;
 
 IFarm public farm;
 IManager public manager;
-IGameContractCrossChain public gameContract;
+ICardGameWithNFT public gameContract;
+ IRankNFT _rankNFT;
 Token public token;
 ISwapManager public swapManager;
 Structss.UserInfoMation infoForUser;
-mapping(address => infoForUser) private userStuff;
+Structss.Community community;
+Structss.Group group;
+
+mapping(address => Structss.UserInfoMation) private userStuff;
+ mapping(uint256 => Structss.Community) public communities; 
+   mapping(uint256 => Structss.Group) public groups;
+
+uint256 public groupCount;
+uint256 public communityCount;
 
 
-constructor(address _manager, address _farm, address _token, address _swapManager, address _gameContract) {
+constructor(address _manager, address _farm, address _token, address _swapManager, address _gameContract, IRankNFT rankNFT) {
     require(_manager != address(0), ErrorLib.Entry__Zero_Address());
     require(_farm != address(0), ErrorLib.Entry__Zero_Address());
     require(_token != address(0), ErrorLib.Entry__Zero_Address());
     manager = IManager(_manager);
     token = Token(_token);
     farm = IFarm(_farm);
-    swapManager = IswapManager(_swapManager);
-    gameContract = IGameContractCrossChain(_gameContract);
+    swapManager= ISwapManager(_swapManager);
+    gameContract = ICardGameWithNFT(_gameContract);
+    _rankNFT =  IRankNFT(rankNFT);
 }
 
+///////////////////////////// register user/////////////////////////////////////////////////////
+//////////////////////////////////////////////////////////////////////////////////////////////
  function registerUser() public{
     require(userStuff[msg.sender].mAddr == address(0), ErrorLib.Entry__already_Registered());
     address _mAddr = activate(msg.sender);
+    address rNFT = cloneRankNFTContract(msg.sender);
 
-    userStuff[msg.sender] = infoForUser({
+    userStuff[msg.sender] = Structss.UserInfoMation ({
         mAddr: _mAddr,
         balance:0,
-        tokenBalance:0
+        tokenBalance:0,
+        _rankNFT: rNFT
     });
 
     
 
  } 
 
+   function createCommunity(string memory _name) public {
+        //manager.OnlyManager();
 
+        communityCount++;
+       Structss.Community storage c = communities[communityCount];
+        c.name = _name;
+        c.owner = msg.sender;
+        c.members.push(msg.sender);
+        c.isMember[msg.sender] = true;
+    }
+
+  function joinCommunity(uint256 communityId) public {
+        require(userStuff[msg.sender].mAddr != address(0), ErrorLib.Entry__not_Registered());
+
+      Structss.Community storage c = communities[communityId];
+        require(!c.isMember[msg.sender], ErrorLib.Entry_Already_Member());
+
+        c.members.push(msg.sender);
+        c.isMember[msg.sender] = true;
+    }
+
+    function createGroup(string memory _name) public {
+        require(userStuff[msg.sender].mAddr != address(0), ErrorLib.Entry__not_Registered());
+
+        groupCount++;
+        Structss.Group storage g = groups[groupCount];
+        g.name = _name;
+        g.creator = msg.sender;
+        g.members.push(msg.sender);
+        g.isMember[msg.sender] = true;
+    }
+
+ function addGroupMember(uint256 groupId, address member) public {
+        require(userStuff[member].mAddr != address(0), ErrorLib.Entry__not_Registered());
+
+          Structss.Group storage g = groups[groupId];
+        require(g.creator == msg.sender, ErrorLib.Entry_only_Creator_Can_Add_Member());
+        require(!g.isMember[member], ErrorLib.Entry_Already_Member());
+
+        g.members.push(member);
+        g.isMember[member] = true;
+    }
+
+
+/////////////////////DeFi/////////////////////////////////////////////////////
+/////////////////////////////////////////////////////////////////////////////////////
+//@dev will chain and make it a cross chain Market type using CCIP
 
  function enterAaveMarket(uint256 amountIn, uint minAmountOut) public{
     require(userStuff[msg.sender].mAddr != address(0), ErrorLib.Entry__not_Registered());
@@ -56,9 +122,9 @@ constructor(address _manager, address _farm, address _token, address _swapManage
    
  }
 
- function exitAaveMarket(uint256 amountIn, uint minAmountOut) public{
+ function exitAaveMarket(uint256 amountIn, address to, uint minAmountOut) public{
     require(userStuff[msg.sender].mAddr != address(0), ErrorLib.Entry__not_Registered());
-    uint256 amountReceived = farm.withdrawFromAave(amountIn, minAmountOut);
+    uint256 amountReceived = farm.withdrawFromAave(amountIn,to, minAmountOut);
     // burn Tokens of equilavalnce to user
     token.burn(amountReceived);
     userStuff[msg.sender].tokenBalance -= amountIn;
@@ -67,7 +133,7 @@ constructor(address _manager, address _farm, address _token, address _swapManage
     }
 
 
-function swapTokens(address tokenIn, address tokenOut, uint256 amountIn, uint256 minAmountOut, uint40 tier, uint40 deadline, address receiverAddr) public {
+function swapTokens(address tokenIn, address tokenOut, uint256 amountIn, uint256 minAmountOut, uint24 tier, uint40 deadline, address receiverAddr) public {
     require(userStuff[msg.sender].mAddr != address(0), ErrorLib.Entry__not_Registered());
     swapManager.swapExactInputSingle(
         tokenIn,
@@ -83,59 +149,87 @@ function swapTokens(address tokenIn, address tokenOut, uint256 amountIn, uint256
 
 //////////////////////////game//////////////////////////////////////
 ////////////////////////////////////////////////////////////////////
+function createGame(uint256 totalPlayers, uint256 betAmountRequired) public {
+    require(userStuff[msg.sender].mAddr != address(0), ErrorLib.Entry__not_Registered());
+    require(betAmountRequired > manager.getminbetAmount(), ErrorLib.Entry__bet_Amount_Cannot_Be_Zero());
+    require(betAmountRequired <= manager.getmaxbetAmount(), ErrorLib.Entry_betAmountTooBig());
 
-function startGame(uint256 _betamount)public {
+    gameContract.CreateNewGame(totalPlayers, betAmountRequired);
+}
+
+function startGame(uint256 gamesId, uint256 _betamount) public {
     require(userStuff[msg.sender].mAddr != address(0), ErrorLib.Entry__not_Registered());
     require(_betamount > manager.getminbetAmount(), ErrorLib.Entry__bet_Amount_Cannot_Be_Zero());
     require(_betamount <=manager.getmaxbetAmount(), ErrorLib.Entry_betAmountTooBig());
 
     
-    gameContract.startGame(_betamount);
+    gameContract.startGame(gamesId);
     
 }
 
-function hit() public{
+function hit(uint256 gameId) public{
    
-    gameContract.hit();
+    gameContract.hit(gameId);
 }
 
-function stand() public{
+function stand(uint256 gameId) public{
    
-    gameContract.stand();
+    gameContract.stand(gameId);
+}
+function poke(uint256 gameId, address target) public {
+   
+    gameContract.poke(gameId, target);
 }
 
-/////////////////////////////////////////////////////////////////////////
+///////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+////////////// Internal Functions/////////////////////////////////////////////////////////////////////////////////////////////
 
 function activate(address UserAdminAddress)  internal returns(address mAddr){
-      mAddr = Clones.clone(manager(UserAdminAddress));
+    address impl = getManagerAddress();
+     mAddr = Clones.clone(impl);
       return mAddr;
 
 }
 
+    //@dev move this to entry contract and addd to user
+function cloneRankNFTContract(address user) internal returns (address rNFT) {
+    address impl = getNFTContractAddress();
+     rNFT = Clones.clone(impl);
+    return rNFT;
+}
+
+
 //Only certain function can call this
-function increaseBlance(address user, uint256 amount) public {
+function increaseBlance(address user, uint256 amount) internal {
     require(userStuff[user].mAddr != address(0), ErrorLib.Entry__not_Registered());
     userStuff[user].balance += amount;
 }
 
 //Only certain function can call this
-function decreaseBlance(address user, uint256 amount) public {
+function decreaseBlance(address user, uint256 amount) internal {
     require(userStuff[user].mAddr != address(0), ErrorLib.Entry__not_Registered());
     require(userStuff[user].balance >= amount, "Insufficient balance");
     userStuff[user].balance -= amount;
 }
 
-function getUserInfo(address user) public view returns(address, uint256, uint256) {
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+//////////////////////  Getters///////////////////////////////////////////////////////////////////////////////////////////////
+function getUserInfo(address user) public view returns(address, uint256, uint256, address) {
     require(userStuff[user].mAddr != address(0), ErrorLib.Entry__not_Registered());
     // Return the user information
-    infoForUser memory userInfo = userStuff[user];
-    return (userInfo.mAddr, userInfo.balance, userInfo.tokenBalance);
+  Structss.UserInfoMation  memory userInfo = userStuff[user];
+    return (userInfo.mAddr, userInfo.balance, userInfo.tokenBalance, userInfo._rankNFT);
 
 }
-
-function getBalanceOf(address user, address tokenAddress) public view returns(uint256){
-    IERC20 tokenAddr = IERC20(tokenAddress);
-    return tokenAddr.balanceOf(user);
+function getBalanceOf(address user, address tokenAddress) public view returns (uint256) {
+    IERC20 _token = IERC20(tokenAddress); // correct type
+    return _token.balanceOf(user);        // call balanceOf() on IERC20 instance
 }
+
+function getManagerAddress() public view returns(address){
+    return address(manager);}
+
+    function getNFTContractAddress() public view returns(address){
+    return address(_rankNFT);}
 
 }

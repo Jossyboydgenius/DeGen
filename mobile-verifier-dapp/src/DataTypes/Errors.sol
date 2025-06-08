@@ -1,6 +1,6 @@
 //SPDX-License-Identifier:MIT
 
-pragma solidity 0.8.26;
+pragma solidity 0.8.28;
 
 
 library ErrorLib{
@@ -15,6 +15,7 @@ library ErrorLib{
     error Manager__OnlyEntryPoint();
     error Entry__not_Registered();
     error Entry_betAmountTooBig();
+    error Manager__EntryPoint_Cannot_Be_Zero();
 
 
     //////permission/////
@@ -23,5 +24,16 @@ library ErrorLib{
 
     ///Entry
     error Entry__already_Registered();
+    error Entry_Already_Member();
+    error Entry_only_Creator_Can_Add_Member();
+   error  Entry__Zero_Address();
+   error Entry__bet_Amount_Cannot_Be_Zero();
+
+    ///Game
+
+    error Game__InvalidNumberOfPlayers();
+   error Game__InvalidState();
+  
+  
 
 }

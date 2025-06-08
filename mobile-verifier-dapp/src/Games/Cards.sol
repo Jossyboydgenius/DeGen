@@ -1,365 +1,395 @@
-// SPDX-License-Identifier: UNLICENSED
-pragma solidity ^0.8.13;
+// SPDX-License-Identifier: MIT
+pragma solidity 0.8.28;
 
-import "@chainlink/contracts/src/v0.8/VRFConsumerBaseV2.sol";
-import "@chainlink/contracts/src/v0.8/interfaces/VRFCoordinatorV2Interface.sol";
-import "@chainlink/contracts/src/v0.8/interfaces/AutomationCompatibleInterface.sol";
-import "@flarenetwork/flare-periphery-contracts/stateConnector/StateConnector.sol";
 import {IRankNFT} from "../Interface/Games/IRankNFT.sol";
-import { IERC20 } from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
-import { SafeERC20 } from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
+import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 
 import {IEntry} from "../Interface/Core/IEntry.sol";
-import{IGameContractCrossChain} from "../Interface/Games/IGameContractCrossChain.sol";
+import {ICardGameWithNFT} from "../Interface/Games/IGameContract.sol";
+import {Structss} from "../DataTypes/Structs.sol";
+import {ErrorLib} from "../DataTypes/Errors.sol";
 
-contract GameContractCrossChain is IGameContractCrossChain, VRFConsumerBaseV2, AutomationCompatibleInterface {
+import {VRFConsumerBaseV2Plus} from "@chainlink/contracts/src/v0.8/vrf/dev/VRFConsumerBaseV2Plus.sol";
+import {VRFV2PlusClient} from "@chainlink/contracts/src/v0.8/vrf/dev/libraries/VRFV2PlusClient.sol";
+
+contract CardGameWithNFT is ICardGameWithNFT, VRFConsumerBaseV2Plus {
     using SafeERC20 for IERC20;
-    // Game Structures
-    struct GameSession {
-        address player;
-        uint256 betAmount;
-        uint256[] playerCards;
-        uint256[] dealerCards;
-        uint256[] availableCards;
-        bool inProgress;
-        uint256 lastActionTime;
-        address _rankNFTaddr;
-    }
 
-    // Chainlink VRF
-    VRFCoordinatorV2Interface private immutable vrfCoordinator;
-    uint64 private immutable subscriptionId;
-    bytes32 private immutable gasLane;
-    uint32 private immutable callbackGasLimit;
-    uint16 private constant REQUEST_CONFIRMATIONS = 3;
-    uint32 private constant NUM_WORDS = 1;
-    mapping(uint256 => address) private vrfRequests;
+    IEntry private immutable _entry;
+    IRankNFT private immutable _rankNFT;
+    address private immutable _token;
 
-    // Chainlink Automation
-    uint256 private constant GAME_TIMEOUT = 1 hours;
-    
-    // Flare State Connector
-    StateConnector public immutable stateConnector;
+    uint256 public s_gameId;
 
+    // Chainlink VRF config
+    bytes32 private immutable i_keyHash;
+    uint256 private immutable i_subscriptionId;
+    uint32 private immutable i_callbackGasLimit;
 
-    // Game Configuration
-    address public _gameToken;
-    
-    // Game State
-    mapping(address => GameSession) public activeGames;
-    mapping(address => uint256) public playerBalances;
-    uint256 public houseBalance;
-  
-  uint256 gamesPlayedCount = 1;
-  uint256 gamesWonCount = 1;
-    IRankNFT public rankNFT;
-    IEntry public entryPoint;
+    // Constants
+    uint256 private constant MAX_PLAYERS = 4;
+    uint256 private constant CARDS_PER_PLAYER = 2;
+    uint256 private constant BLACKJACK = 21;
+    //uint8[52] private deck;
+
+    // For mapping random requests to gameIds
+    mapping(uint256 => uint256) private s_requestIdToGameId;
+
+    // Game storage
+    mapping(uint256 => Structss.CurrentGame) public gameStarted;
 
     // Events
-    event GameStarted(address indexed player, uint256 betAmount);
-    event CardDrawn(address indexed player, uint256 cardValue);
-    event GameResult(address indexed player, bool won, uint256 amount);
-    event CrossChainUpdate(address indexed player, bytes32 updateHash);
-    event BalanceUpdated(address indexed player, uint256 newBalance);
+    event GameStarted(uint256 indexed gameId);
+    event CardsDealt(uint256 indexed gameId);
+    event CardDrawn(address indexed player, uint8 card);
+    event WinnerDeclared(address indexed winner, uint256 gameId);
+    event NFTMinted(address indexed winner, uint256 tokenId);
+    event GameReset(uint256 indexed gameId);
 
     constructor(
-        address _vrfCoordinator,
-        uint64 _subscriptionId,
-        bytes32 _gasLane,
-        uint32 _callbackGasLimit,
-        address _stateConnector
-        address _rankNFT,
-        address _gameToken,
-        address _entryPoint
-    ) VRFConsumerBaseV2(_vrfCoordinator) {
-        vrfCoordinator = VRFCoordinatorV2Interface(_vrfCoordinator);
-        subscriptionId = _subscriptionId;
-        gasLane = _gasLane;
-        callbackGasLimit = _callbackGasLimit;
-        stateConnector = StateConnector(_stateConnector);
-        rankNFT = IRankNFT(_rankNFT);
-        gameToken = _gameToken;
-        entryPoint = IEntry(_entryPoint);
+        address vrfCoordinator,
+        bytes32 keyHash,
+        uint256 subscriptionId,
+        uint32 callbackGasLimit,
+        address entry,
+        address token,
+        address rankNFT
+    ) VRFConsumerBaseV2Plus(vrfCoordinator) {
+        i_keyHash = keyHash;
+        i_subscriptionId = subscriptionId;
+        i_callbackGasLimit = callbackGasLimit;
+
+        _entry = IEntry(entry);
+        _token = token;
+        _rankNFT = IRankNFT(rankNFT);
     }
 
-    // Start a new game with a bet
-    function startGame(uint256 betAmount) external onlyEntryPoint {
-       IERC20(_gameToken).safeTransferFrom(msg.sender, address(this), betAmount);
-        require(activeGames[msg.sender].player == address(0), "Game already in progress");
+    // Create a new game and set initial bet, player count etc
+    function CreateNewGame(uint256 betAmountRequired, uint256 noOfPlayers) external onlyEntryPoint {
+        require(noOfPlayers <= MAX_PLAYERS, "Too many players");
 
-       
-        GameSession storage session = activeGames[msg.sender];
-        session.player = msg.sender;
-        session.betAmount = betAmount;
-        session.inProgress = true;
-        session.lastActionTime = block.timestamp;
-        
-       
-        for (uint256 i = 1; i <= 52; i++) {
-            session.availableCards.push(i);
-        }
+        s_gameId++;
+        uint256 gameIndex = s_gameId;
 
-        // Request random cards for initial deal
-        uint256 requestId = vrfCoordinator.requestRandomWords(
-            gasLane,
-            subscriptionId,
-            REQUEST_CONFIRMATIONS,
-            callbackGasLimit,
-            NUM_WORDS
+        Structss.CurrentGame storage game = gameStarted[gameIndex];
+        game.totalPlayers = noOfPlayers;
+        game.betAmountRequired = betAmountRequired;
+        game.gameState = Structss.GameState.WAITING;
+        game.lastTimestamp = block.timestamp;
+        game._totalBet = betAmountRequired;
+
+        game.deck = createDeck();
+
+        // Add creator as first player
+        game.players.push(Structss.Player({
+            addr: msg.sender,
+            hand: new uint8 ,
+            isActive: true,
+            rankNFT: address(0),
+            gamesWonCount: 0,
+            gamesPlayedCount: 0
+        }));
+
+        game.isPlayerInGame[msg.sender] = true;
+        game.playerIndex[msg.sender] = 0;
+
+        IERC20(_token).safeTransferFrom(msg.sender, address(this), betAmountRequired);
+
+        emit GameStarted(gameIndex);
+    }
+
+    // Player joins existing game
+    function joinGame(uint256 gameId, uint256 amount) external onlyEntryPoint {
+        Structss.CurrentGame storage game = gameStarted[gameId];
+
+        require(game.gameState == Structss.GameState.WAITING, "Game not waiting");
+        require(!game.isPlayerInGame[msg.sender], "Already registered");
+        require(game.players.length < game.totalPlayers, "Game full");
+
+        game.players.push(Structss.Player({
+            addr: msg.sender,
+            hand: new uint8 ,
+            isActive: true,
+            rankNFT: address(0),
+            gamesWonCount: 0,
+            gamesPlayedCount: 0
+        }));
+
+        uint256 index = game.players.length - 1;
+        game.isPlayerInGame[msg.sender] = true;
+        game.playerIndex[msg.sender] = index;
+
+        game._totalBet += amount;
+
+        IERC20(_token).safeTransferFrom(msg.sender, address(this), amount);
+    }
+
+    
+
+    // Create a new game and set initial bet, player count etc
+    function CreateNewGame(uint256 betAmountRequired, uint256 noOfPlayers) external onlyEntryPoint {
+        require(noOfPlayers <= MAX_PLAYERS, "Too many players");
+
+        s_gameId++;
+        uint256 gameIndex = s_gameId;
+
+        Structss.CurrentGame storage game = gameStarted[gameIndex];
+        game.totalPlayers = noOfPlayers;
+        game.betAmountRequired = betAmountRequired;
+        game.gameState = Structss.GameState.WAITING;
+        game.lastTimestamp = block.timestamp;
+        game._totalBet = betAmountRequired;
+
+        game.deck = createDeck();
+
+        // Add creator as first player
+        game.players.push(Structss.Player({
+            addr: msg.sender,
+            hand: new uint8 ,
+            isActive: true,
+            rankNFT: address(0),
+            gamesWonCount: 0,
+            gamesPlayedCount: 0
+        }));
+
+        game.isPlayerInGame[msg.sender] = true;
+        game.playerIndex[msg.sender] = 0;
+
+        IERC20(_token).safeTransferFrom(msg.sender, address(this), betAmountRequired);
+
+        emit GameStarted(gameIndex);
+    }
+
+    // Player joins existing game
+    function joinGame(uint256 gameId, uint256 amount) external onlyEntryPoint {
+        Structss.CurrentGame storage game = gameStarted[gameId];
+
+        require(game.gameState == Structss.GameState.WAITING, "Game not waiting");
+        require(!game.isPlayerInGame[msg.sender], "Already registered");
+        require(game.players.length < game.totalPlayers, "Game full");
+
+        game.players.push(Structss.Player({
+            addr: msg.sender,
+            hand: new uint8 ,
+            isActive: true,
+            rankNFT: address(0),
+            gamesWonCount: 0,
+            gamesPlayedCount: 0
+        }));
+
+        uint256 index = game.players.length - 1;
+        game.isPlayerInGame[msg.sender] = true;
+        game.playerIndex[msg.sender] = index;
+
+        game._totalBet += amount;
+
+        IERC20(_token).safeTransferFrom(msg.sender, address(this), amount);
+    }
+
+    // Start the game: request randomness for shuffling from Chainlink VRF
+    function startGame(uint256 gameId) external onlyEntryPoint {
+        Structss.CurrentGame storage game = gameStarted[gameId];
+
+        require(game.gameState == Structss.GameState.WAITING, "Invalid state");
+        require(game.players.length >= 2, "Not enough players");
+
+        game.gameState = Structss.GameState.SHUFFLING;
+
+       //@dev fix this
+        uint256 requestId = requestRandomWords(
+            i_keyHash,
+            i_subscriptionId,
+            3, // request confirmations
+            i_callbackGasLimit,
+            1 // num words
         );
-        vrfRequests[requestId] = msg.sender;
 
-        emit GameStarted(msg.sender, betAmount);
+        s_requestIdToGameId[requestId] = gameId;
     }
 
-    // Chainlink VRF callback
+    // Chainlink VRF callback with randomness to shuffle the deck
     function fulfillRandomWords(uint256 requestId, uint256[] memory randomWords) internal override {
-        address player = vrfRequests[requestId];
-        GameSession storage session = activeGames[player];
-        
-        // Deal initial cards
-        _drawCard(player, randomWords[0]);
-        _drawCard(player, randomWords[0] >> 8); // shift right
-        
-        // Second card for dealer (face down)
-        _drawDealerCard(player, randomWords[0] >> 16);
+        uint256 gameId = s_requestIdToGameId[requestId];
+        Structss.CurrentGame storage game = gameStarted[gameId];
+        require(game.gameState == Structss.GameState.SHUFFLING, "Game not shuffling");
+
+        // Shuffle deck using Fisher-Yates and the random seed
+        game.deck = shuffleDeckWithSeed(game.deck, randomWords[0]);
+
+        game.gameState = Structss.GameState.DEALING;
+
+        // Deal cards to players
+        dealPlayersWithCards(gameId);
+
+        game.lastTimestamp = block.timestamp;
+        game.gameState = Structss.GameState.PLAYING;
+
+        emit GameStarted(gameId);
+        emit CardsDealt(gameId);
     }
 
-    // Player action to draw another card
-    function hit() external {
-        GameSession storage session = activeGames[msg.sender];
-        require(session.inProgress, "No active game");
-        
-        // Request random card
-        uint256 requestId = vrfCoordinator.requestRandomWords(
-            gasLane,
-            subscriptionId,
-            REQUEST_CONFIRMATIONS,
-            callbackGasLimit,
-            NUM_WORDS
-        );
-        vrfRequests[requestId] = msg.sender;
-    }
+    function hit(uint256 gameId) external onlyEntryPoint {
+        Structss.CurrentGame storage game = gameStarted[gameId];
+        require(game.gameState == Structss.GameState.PLAYING, "Game not playing");
+        require(game.isPlayerInGame[msg.sender], "Not registered");
 
-    // Player action to stand
-    function stand() external {
-        GameSession storage session = activeGames[msg.sender];
-        require(session.inProgress, "No active game");
-        
-        // Dealer draws until reaching threshold
-        while (_calculateHand(session.dealerCards) < 17) {
-            uint256 randomValue = uint256(keccak256(abi.encodePacked(block.timestamp, block.difficulty)));
-            _drawDealerCard(msg.sender, randomValue);
-        }
-        
-        _determineWinner(msg.sender);
-    }
+        Structss.Player storage player = game.players[game.playerIndex[msg.sender]];
+        require(player.isActive, "Player not active");
+        require(player.hand.length < CARDS_PER_PLAYER, "Max cards reached");
 
-  // Chainlink Automation: Check for games needing upkeep
-    function checkUpkeep(
-        bytes calldata /* checkData */
-    ) external view override returns (bool upkeepNeeded, bytes memory performData) {
-        // This simplified version checks all active games
-        // In production, you'd want a more efficient approach
-        
-        // Initialize empty array to store games needing upkeep
-        address[] memory gamesNeedingUpkeep = new address[](0);
-        uint256 count = 0;
-        
-        // Check all active games (note: this is inefficient for many games)
-        address[] memory activePlayers = _getActivePlayers();
-        for (uint256 i = 0; i < activePlayers.length; i++) {
-            address player = activePlayers[i];
-            GameSession storage session = activeGames[player];
-            
-            // Check if game has timed out
-            if (block.timestamp - session.lastActionTime > GAME_TIMEOUT) {
-                // Resize array (inefficient but works for demonstration)
-                address[] memory newArray = new address[](count + 1);
-                for (uint256 j = 0; j < count; j++) {
-                    newArray[j] = gamesNeedingUpkeep[j];
-                }
-                newArray[count] = player;
-                gamesNeedingUpkeep = newArray;
-                count++;
-            }
-        }
-        
-        upkeepNeeded = gamesNeedingUpkeep.length > 0;
-        performData = abi.encode(gamesNeedingUpkeep);
-    }
+        uint8 card = game.deck[game.deck.length - 1];
+        player.hand.push(card);
+        game.deck.pop();
 
-    // Chainlink Automation: Perform upkeep on timed-out games
-    function performUpkeep(bytes calldata performData) external override {
-        address[] memory gamesToProcess = abi.decode(performData, (address[]));
-        
-        for (uint256 i = 0; i < gamesToProcess.length; i++) {
-            address player = gamesToProcess[i];
-            GameSession storage session = activeGames[player];
-            
-            // Only process if game still exists and is timed out
-            if (session.inProgress && 
-                block.timestamp - session.lastActionTime > GAME_TIMEOUT) {
-                
-                // Player loses by default for timing out
-                _endGame(player, false);
-                
-                // Emit special event for timeout
-                emit GameResult(player, false, 0, "Game timed out");
-            }
+        emit CardDrawn(msg.sender, card);
+
+        if (calculateHandValue(player.hand) > BLACKJACK) {
+            player.isActive = false;
+            emit WinnerDeclared(msg.sender, gameId);
+            declareWinner(gameId);
         }
     }
 
-    // Helper function to get all active players (not efficient for large scales)
-    function _getActivePlayers() internal view returns (address[] memory) {
-        // In production, you'd want to maintain a separate array of active players
-        // This is just for demonstration
-        address[] memory players = new address[](100); // Arbitrary size
-        uint256 count = 0;
-        
-        // This is VERY inefficient - don't use in production
-        // Just showing the concept
-        for (uint256 i = 0; i < 100; i++) {
-            address potentialPlayer = address(uint160(i + 1)); // Just a demo
-            if (activeGames[potentialPlayer].inProgress) {
-                players[count] = potentialPlayer;
-                count++;
-            }
-        }
-        
-        // Resize array
-        address[] memory result = new address[](count);
-        for (uint256 i = 0; i < count; i++) {
-            result[i] = players[i];
-        }
-        
-        return result;
-    }
+    function poke(uint256 gameId, address target) external onlyEntryPoint {
+        Structss.CurrentGame storage game = gameStarted[gameId];
+        require(game.gameState == Structss.GameState.PLAYING, "Game not playing");
+        require(game.isPlayerInGame[msg.sender], "Sender not registered");
+        require(game.isPlayerInGame[target], "Target not registered");
 
-    // Internal game functions
-    function _drawCard(address player, uint256 randomValue) internal {
-        GameSession storage session = activeGames[player];
-        uint256 cardIndex = randomValue % session.availableCards.length;
-        uint256 card = session.availableCards[cardIndex];
-        
-        // Remove card from deck
-        session.availableCards[cardIndex] = session.availableCards[session.availableCards.length - 1];
-        session.availableCards.pop();
-        
-        session.playerCards.push(card);
-        emit CardDrawn(player, card);
-        
-        // Check if bust
-        if (_calculateHand(session.playerCards) > 21) {
-            _endGame(player, false);
+        Structss.Player storage sender = game.players[game.playerIndex[msg.sender]];
+        Structss.Player storage targetPlayer = game.players[game.playerIndex[target]];
+        require(sender.isActive && targetPlayer.isActive, "Players must be active");
+
+        uint8 card = game.deck[game.deck.length - 1];
+        targetPlayer.hand.push(card);
+        game.deck.pop();
+
+        emit CardDrawn(target, card);
+
+        if (calculateHandValue(targetPlayer.hand) > BLACKJACK) {
+            targetPlayer.isActive = false;
+            emit WinnerDeclared(target, gameId);
+            declareWinner(gameId);
         }
     }
 
-    function _drawDealerCard(address player, uint256 randomValue) internal {
-        GameSession storage session = activeGames[player];
-        uint256 cardIndex = randomValue % session.availableCards.length;
-        uint256 card = session.availableCards[cardIndex];
-        
-        // Remove card from deck
-        session.availableCards[cardIndex] = session.availableCards[session.availableCards.length - 1];
-        session.availableCards.pop();
-        
-        session.dealerCards.push(card);
+    function stand(uint256 gameId) external onlyEntryPoint {
+        Structss.CurrentGame storage game = gameStarted[gameId];
+        require(game.gameState == Structss.GameState.PLAYING, "Game not playing");
+        require(game.isPlayerInGame[msg.sender], "Not registered");
+
+        Structss.Player storage player = game.players[game.playerIndex[msg.sender]];
+        require(player.isActive, "Player already inactive");
+
+        player.isActive = false;
+
+        emit WinnerDeclared(msg.sender, gameId);
+        declareWinner(gameId);
     }
 
-    function _calculateHand(uint256[] memory cards) internal pure returns (uint256) {
-        uint256 total = 0;
-        uint256 aces = 0;
-        
-        for (uint256 i = 0; i < cards.length; i++) {
-            uint256 value = cards[i] % 13;
-            if (value == 0 || value >= 10) {
-                total += 10;
-                if (value == 0) aces++;
+    function calculateHandValue(uint8[] memory hand) internal pure returns (uint8) {
+        uint8 value = 0;
+        uint8 aces = 0;
+
+        for (uint256 i = 0; i < hand.length; i++) {
+            uint8 cardValue = hand[i] % 13;
+            if (cardValue >= 10) {
+                value += 10;
+            } else if (cardValue == 0) {
+                value += 11;
+                aces++;
             } else {
-                total += value;
+                value += cardValue + 1;
             }
         }
-        
-        // Handle aces
-        while (total > 21 && aces > 0) {
-            total -= 10;
+
+        while (value > BLACKJACK && aces > 0) {
+            value -= 10;
             aces--;
         }
-        
-        return total;
+
+        return value;
     }
 
-    function _determineWinner(address player) internal {
-        GameSession storage session = activeGames[player];
-        uint256 playerTotal = _calculateHand(session.playerCards);
-        uint256 dealerTotal = _calculateHand(session.dealerCards);
-        
-        bool playerWon = (playerTotal <= 21) && 
-                        ((dealerTotal > 21) || (playerTotal > dealerTotal));
-        
-        _endGame(player, playerWon);
-    }
+    function declareWinner(uint256 gameId) internal {
+        Structss.CurrentGame storage game = gameStarted[gameId];
+        require(game.gameState == Structss.GameState.PLAYING, "Game not playing");
 
-    function _endGame(address player, bool playerWon) internal {
-        GameSession storage session = activeGames[player];
-         _gamesPlayedCount= gamesPlayedCount++
-        // Payout
-        if (playerWon) {
-            uint256 payout = session.betAmount * 2;
-            playerBalances[player] += payout;
-            houseBalance -= payout;
-             rankNFTaddr = CloneNFT();
-             session._rankNFTaddr = rankNFTaddr;
-            mintRankNFT(session.player, gamesWonCount++, _gamesPlayedCount);
-            IERC20(_gameToken).safeTransfer(player, payout);
-            emit GameResult(player, true, payout);
-        } else {
-            houseBalance += session.betAmount;
+        address winner = address(0);
+        uint8 bestScore = 0;
 
-            emit GameResult(player, false, 0);
+        for (uint256 i = 0; i < game.players.length; i++) {
+            Structss.Player storage player = game.players[i];
+            if (player.isActive) {
+                uint8 score = calculateHandValue(player.hand);
+                if (score > bestScore && score <= BLACKJACK) {
+                    bestScore = score;
+                    winner = player.addr;
+                }
+            }
         }
-        
-        // Prepare cross-chain update
-        bytes32 updateHash = keccak256(
-            abi.encodePacked(
-                player,
-                playerWon ? 1 : 0,
-                session.betAmount,
-                block.timestamp
-            )
-        );
-        stateConnector.attestMessageHash(updateHash);
-        emit CrossChainUpdate(player, updateHash);
-        
-        // Clean up
-        // delete activeGames[player];
-        //dont delete, just reset
-        session.inProgress = false;
-    }
-    
-    // Cross-chain verification functions
-    function verifyPolkadotUpdate(
-        bytes32 updateHash,
-        bytes memory proof
-    ) public view returns (bool) {
-        return stateConnector.verifyMessageHash(updateHash, proof);
+
+        if (winner != address(0)) {
+            uint256 winnings = game._totalBet;
+            IERC20(_token).safeTransfer(winner, winnings);
+
+            emit WinnerDeclared(winner, gameId);
+
+            // Mint Rank NFT
+            (,,,address nftAddr) = _entry.getUserInfo(winner);
+            mintRankNFT(winner, 1, 1, nftAddr);
+        }
+
+        delete gameStarted[gameId];
+        emit GameReset(gameId);
     }
 
-    function mintRankNFT(address to, uint256 _gamesWonCount, uint256 _gamesPlayedCount, rankNFtadd) internal {
-     
-        // Mint NFT based on game stats
-        rankNFT.mintRankNFT(to, _gamesWonCount, _gamesPlayedCount, rankNFtaddr);  
+function createDeck() internal pure returns (uint8[] memory) {
+    uint8[] memory deck = new uint8[](52);
+    for (uint8 i = 0; i < 52; i++) {
+        deck[i] = i;
+    }
+    return deck;
+}
+
+    // Secure shuffle using Chainlink VRF random seed
+    function shuffleDeckWithSeed(uint8[] memory deck, uint256 randomSeed) internal pure returns (uint8[] memory) {
+        for (uint256 i = deck.length - 1; i > 0; i--) {
+            uint256 j = uint256(keccak256(abi.encode(randomSeed, i))) % (i + 1);
+            (deck[i], deck[j]) = (deck[j], deck[i]);
+        }
+        return deck;
     }
 
-    function CloneNFT()internal returns(address) {
-        // Clone the NFT contract
-        address clone = address(new IRankNFT());
-        return clone;
+    function dealPlayersWithCards(uint256 gameId) internal {
+        Structss.CurrentGame storage game = gameStarted[gameId];
+        require(game.gameState == Structss.GameState.DEALING, "Game not dealing");
+
+        for (uint256 i = 0; i < game.players.length; i++) {
+            Structss.Player storage player = game.players[i];
+            for (uint256 j = 0; j < CARDS_PER_PLAYER; j++) {
+                uint8 card = game.deck[game.deck.length - 1];
+                player.hand.push(card);
+                game.deck.pop();
+                emit CardDrawn(player.addr, card);
+            }
+        }
+
+        game.gameState = Structss.GameState.PLAYING;
+        emit CardsDealt(gameId);
     }
 
-        modifier onlyEntryPoint() {
-        require(msg.sender == entryPoint, "Only EntryPoint");
+    function getGameDetails(uint256 gameId) external view returns (Structss.CurrentGame memory) {
+        return gameStarted[gameId];
+    }
+
+    function mintRankNFT(address to, uint256 gamesWon, uint256 gamesPlayed, address rankNFTAddress) internal {
+        IRankNFT(rankNFTAddress).mintRankNFT(to, gamesWon, gamesPlayed);
+    }
+
+    modifier onlyEntryPoint() {
+        require(msg.sender == address(_entry), ErrorLib.Manager__OnlyEntryPoint());
         _;
     }
 }

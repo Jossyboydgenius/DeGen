@@ -9,7 +9,7 @@ interface IFarm {
     function liquidity() external view returns (uint256);
 
     /// @notice Returns the manager address controlling this farm
-    function manager() external view returns (address);
+    //function manager() external view returns (address);
 
     /// @notice Deposits `amountIn` tokens into Aave and returns how much was received
     /// @param amountIn The amount of the underlying asset to deposit
