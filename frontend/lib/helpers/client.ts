@@ -46,7 +46,7 @@ export const createSigner = (key: string): Signer => {
 };
 
 /**
- * Generate a random encryption key
+ * Generate a random encryption keys
  * @returns The encryption key
  */
 export const generateEncryptionKeyHex = () => {
