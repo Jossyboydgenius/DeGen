@@ -2,12 +2,21 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 /* eslint-disable @typescript-eslint/no-require-imports */
 
-import { Client, type Signer, IdentifierKind } from '@xmtp/node-sdk';
+import { Client, type Signer } from '@xmtp/node-sdk';
 import { fromString, toString } from "uint8arrays";
 import { createWalletClient, http } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
 import { base, baseSepolia } from "viem/chains";
 import { getDbPath } from './xmtp-browser-helpers';
+
+// Create our own enum to avoid const enum issues
+const IdentifierKind = {
+  Ethereum: 0 as const,
+  Passkey: 1 as const
+} as const;
+
+// Type for the identifier kind
+type IdentifierKindType = typeof IdentifierKind[keyof typeof IdentifierKind];
 
 export interface User {
   key: `0x${string}`;
@@ -43,7 +52,7 @@ export const createNodeSigner = (key: string): Signer => {
   return {
     type: "EOA",
     getIdentifier: () => ({
-      identifierKind: IdentifierKind.Ethereum, // Use the enum from Node SDK
+      identifierKind: IdentifierKind.Ethereum, // Use our own enum
       identifier: user.account.address.toLowerCase(), 
     }),
     signMessage: async (message: string) => {
