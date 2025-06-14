@@ -31,7 +31,7 @@ function OnchainKitProviderInner({ children }: { children: React.ReactNode }) {
       chain={baseSepolia}
       config={{
         appearance: {
-          name: "DeGeN",
+          name: "DeGen",
           logo: "https://raw.githubusercontent.com/Jossyboydgenius/DeGen/refs/heads/main/frontend/public/degen2.png",
           mode: customTheme === "dark" ? "dark" : "light",
           theme: "base",
