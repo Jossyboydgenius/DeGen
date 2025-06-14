@@ -134,8 +134,8 @@ export function ResponsiveNavigation({
               key={item.href}
               href={item.href}
               className={cn(
-                "flex flex-1 flex-col items-center justify-center rounded-full p-2 text-xs transition-all duration-200",
-                "min-w-[50px]", // Increased minimum width
+                "flex flex-1 flex-col items-center justify-center rounded-full p-1.5 text-xs transition-all duration-200",
+                "min-w-[40px]", // Reduced minimum width from 50px to 40px
                 pathname === item.href
                   ? "bg-primary text-primary-foreground scale-105 dark:bg-white/30 dark:text-white dark:shadow-lg"
                   : "text-foreground dark:text-white/70 hover:bg-accent hover:text-accent-foreground dark:hover:bg-white/20 dark:hover:text-white hover:scale-105"
@@ -145,7 +145,7 @@ export function ResponsiveNavigation({
                 {item.icon}
               </div>
               <span className={cn(
-                "mt-1 text-[9px] md:text-[10px] font-medium truncate w-full text-center transition-opacity duration-200",
+                "mt-0.5 text-[8px] md:text-[10px] font-medium truncate w-full text-center transition-opacity duration-200",
                 "leading-tight" // Better line height for small text
               )}>
                 {item.label}
