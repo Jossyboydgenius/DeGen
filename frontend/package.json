@@ -6,7 +6,8 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint"
+    "lint": "next lint",
+    "vercel-build": "pnpm install && pnpm build"
   },
   "dependencies": {
     "@coinbase/agentkit": "^0.8.2",
