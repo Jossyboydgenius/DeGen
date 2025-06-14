@@ -32,7 +32,7 @@ function OnchainKitProviderInner({ children }: { children: React.ReactNode }) {
       config={{
         appearance: {
           name: "DEGEN",
-          logo: "https://raw.githubusercontent.com/Jossyboydgenius/DeGen/refs/heads/main/frontend/public/degen.png",
+          logo: "https://raw.githubusercontent.com/Jossyboydgenius/DeGen/refs/heads/main/frontend/public/degen2.png",
           mode: customTheme === "dark" ? "dark" : "light",
           theme: "base",
         },
