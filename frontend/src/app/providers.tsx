@@ -32,14 +32,14 @@ function OnchainKitProviderInner({ children }: { children: React.ReactNode }) {
       config={{
         appearance: {
           name: "DEGEN",
-          logo: "https://pbs.twimg.com/profile_images/1902457858232287232/lLiKq_s__400x400.jpg",
+          logo: "https://raw.githubusercontent.com/Jossyboydgenius/DeGen/refs/heads/main/frontend/public/degen.png",
           mode: customTheme === "dark" ? "dark" : "light",
           theme: "base",
         },
         wallet: {
           display: "modal",
-          termsUrl: "https://cryptotraderpro.com/terms",
-          privacyUrl: "https://cryptotraderpro.com/privacy",
+          termsUrl: "/terms",
+          privacyUrl: "/privacy",
         },
       }}
     >
