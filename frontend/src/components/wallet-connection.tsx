@@ -11,6 +11,7 @@ import { Button } from "@/components/ui/button"
 import { Copy, ExternalLink } from "lucide-react"
 import { toast } from "sonner"
 import entry, { contractAddress, entryABI } from "../web3/web3"
+import { FaUserCircle } from "react-icons/fa"
 
 export interface WalletConnectionProps {
   className?: string;
@@ -71,20 +72,7 @@ const WalletConnection: React.FC<WalletConnectionProps> = ({ className, buttonLa
   // Custom styled connect button
   const CustomConnectButton = () => (
     <Button variant="default" className={`${className} flex items-center gap-2`}>
-      <svg
-        xmlns="http://www.w3.org/2000/svg"
-        width="16"
-        height="16"
-        viewBox="0 0 24 24"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="2"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      >
-        <rect width="20" height="14" x="2" y="5" rx="2" />
-        <line x1="2" x2="22" y1="10" y2="10" />
-      </svg>
+      <FaUserCircle size={16} />
       {buttonLabel}
     </Button>
   )
