@@ -1,0 +1,11 @@
+# Ignore everything in the root except frontend
+/*
+!frontend/
+!vercel.json
+
+# Other files to ignore
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+node_modules
