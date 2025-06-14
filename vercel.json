@@ -1,10 +1,4 @@
 {
-  "version": 2,
-  "outputDirectory": "frontend/.next",
-  "rewrites": [
-    {
-      "source": "/(.*)",
-      "destination": "/frontend/$1"
-    }
-  ]
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "buildCommand": "cd frontend && pnpm install && pnpm build"
 }
