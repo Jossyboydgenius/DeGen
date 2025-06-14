@@ -39,16 +39,29 @@ export default function RootLayout({
         )}
         suppressHydrationWarning
       >
-        <Providers>          <ResponsiveNavigation
+        <Providers>          
+          <ResponsiveNavigation
               logo={
-                <div className="flex items-center gap-2">                  <Image 
-                    src="/degen1.png" 
-                    alt="DeGen Logo" 
-                    width={30} 
-                    height={30} 
-                    className="h-10 w-10"
-                  />
-                  <span className="text-2xl font-bold">DeGen</span>
+                <div className="flex items-center gap-2">                  
+                  <div className="hidden dark:block">
+                    <Image 
+                      src="/degen.png" 
+                      alt="DeGen Logo" 
+                      width={30} 
+                      height={30} 
+                      className="h-10 w-10"
+                    />
+                  </div>
+                  <div className="block dark:hidden">
+                    <Image 
+                      src="/degen1.png" 
+                      alt="DeGen Logo" 
+                      width={55} 
+                      height={30} 
+                      className="h-10 w-15"
+                    />
+                  </div>
+                  {/* <span className="text-2xl font-bold">DeGen</span> */}
                 </div>
               }
             ThemeToggle={ThemeToggle}
