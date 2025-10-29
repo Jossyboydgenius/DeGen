@@ -371,4 +371,3 @@ forge script script/Deploy.s.sol:DeployToBase \
 ---
 
 **DeGen** - Bridging the gap between traditional finance and Web3, safely and simply.
-
