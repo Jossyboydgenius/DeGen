@@ -130,17 +130,17 @@ DeGen integrates several innovative technologies:
 
 ## Future Roadmap
 
-### Q3 2025
+### Q1 2025
 - CCIP integration for cross-chain supply management
 - Cross-chain swap functionality
 - Enhanced agent verification system
 
-### Q4 2025
+### Q2 2025
 - Chainlink VRF implementation for gaming fairness
 - Chainlink Automation for recurring processes
 - Expanded conditional voting features
 
-### Q1 2026
+### Q3 2026
 - Mobile application release
 - Additional game integrations
 - Advanced yield strategies
