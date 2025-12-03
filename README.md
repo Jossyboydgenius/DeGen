@@ -1,4 +1,4 @@
-# DeGen: Bridging Mobile Banking & DeFi
+# DeGen: Bridging Mobile Banking & DeFi. 
 
 ## Overview
 
